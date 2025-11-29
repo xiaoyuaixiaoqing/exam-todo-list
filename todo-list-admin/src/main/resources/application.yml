@@ -1,0 +1,39 @@
+---
+#??
+server:
+  port: 80
+
+---
+
+spring:
+  #datasource
+  datasource:
+    url: jdbc:mysql://192.168.152.128:3306/todo_list?serverTimezone=UTC
+    username: root
+    password: 200446sYx@
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  #????/templates/????
+  #??redis
+  data:
+    redis:
+      host: 192.168.152.128
+      port: 6379
+      password: 200446sYx
+
+---
+#mybatis
+mybatis-plus:
+  mapper-locations: classpath:/mapper/*Mapper.xml
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: org.apache.ibatis.type.EnumOrdinalTypeHandler
+  global-config:
+    db-config:
+      id-type: assign_id
+      # ??????
+      logic-delete-value: 0
+      # ??????
+      logic-not-delete-value: 1
+      # ?????????
+      logic-delete-field: is_deleted
