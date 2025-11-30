@@ -38,7 +38,38 @@ public class TaskController {
     @GetMapping
     public Result<IPage<Task>> list(@RequestParam Long userId,
                                      @RequestParam(defaultValue = "1") Integer page,
-                                     @RequestParam(defaultValue = "10") Integer size) {
-        return Result.success(taskService.list(userId, page, size));
+                                     @RequestParam(defaultValue = "10") Integer size,
+                                     @RequestParam(required = false) String category,
+                                     @RequestParam(required = false) Integer status,
+                                     @RequestParam(required = false) Integer priority,
+                                     @RequestParam(required = false) String sortBy) {
+        return Result.success(taskService.list(userId, page, size, category, status, priority, sortBy));
+    }
+
+    @GetMapping("/search")
+    public Result<java.util.List<Task>> search(@RequestParam Long userId, @RequestParam String keyword) {
+        return Result.success(taskService.search(userId, keyword));
+    }
+
+    @GetMapping("/recycle")
+    public Result<java.util.List<Task>> getRecycleBin(@RequestParam Long userId) {
+        return Result.success(taskService.getRecycleBin(userId));
+    }
+
+    @PostMapping("/recycle/{id}/restore")
+    public Result<Void> restore(@PathVariable Long id) {
+        taskService.restore(id);
+        return Result.success(null);
+    }
+
+    @DeleteMapping("/recycle/{id}")
+    public Result<Void> permanentDelete(@PathVariable Long id) {
+        taskService.permanentDelete(id);
+        return Result.success(null);
+    }
+
+    @GetMapping("/overdue")
+    public Result<java.util.List<Task>> getOverdueTasks(@RequestParam Long userId) {
+        return Result.success(taskService.getOverdueTasks(userId));
     }
 }

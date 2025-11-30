@@ -16,6 +16,7 @@ public class MyMetaObjectHandler implements MetaObjectHandler {
         log.debug("开始插入填充");
         this.setFieldValByName("createTime", LocalDateTime.now(), metaObject);
         this.setFieldValByName("updateTime", LocalDateTime.now(), metaObject);
+        this.setFieldValByName("deletedTime", LocalDateTime.now(), metaObject);
     }
 
     @Override
