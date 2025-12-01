@@ -95,15 +95,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { EditPen, Delete, User, Search } from '@element-plus/icons-vue'
-import { getTasks, createTask, updateTask, deleteTask, searchTasks, getOverdueTasks } from '../api/task'
+import { getTasks, createTask, updateTask, deleteTask, searchTasks, getOverdueTasks, lockTask, unlockTask } from '../api/task'
 import { useUserStore } from '../stores/user'
 import confetti from 'canvas-confetti'
 import TaskCard from '../components/TaskCard.vue'
 import TaskDialog from '../components/TaskDialog.vue'
+import { TaskWebSocket } from '../utils/websocket'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -113,6 +114,7 @@ const showDialog = ref(false)
 const searchKeyword = ref('')
 const filter = reactive({ category: null, status: null, priority: null, sortBy: 'createTime' })
 const currentTask = reactive({ id: null, title: '', description: '', category: '工作', status: 0, priority: 1, dueDate: null, userId: 1 })
+const ws = new TaskWebSocket()
 
 const soonDueTasks = computed(() => {
   const now = new Date().getTime()
@@ -165,20 +167,33 @@ const loadOverdueTasks = async () => {
   overdueTasks.value = res.data
 }
 
-const openDialog = (task?: any) => {
+const openDialog = async (task?: any) => {
   if (task) {
     Object.assign(currentTask, task)
+    if (task.id) {
+      const res: any = await lockTask(task.id, 1)
+      if (!res.data) {
+        ElMessage.warning('任务正在被其他用户编辑')
+        return
+      }
+    }
   } else {
     Object.assign(currentTask, { id: null, title: '', description: '', category: '工作', status: 0, priority: 1, dueDate: null, userId: 1 })
   }
   showDialog.value = true
 }
 
-const closeDialog = () => {
+const closeDialog = async () => {
+  if (currentTask.id) {
+    await unlockTask(currentTask.id, 1)
+  }
   showDialog.value = false
 }
 
 const handleSave = async (task: any) => {
+  if (task.id) {
+    unlockTask(task.id, 1)
+  }
   showDialog.value = false
   try {
     if (task.id) {
@@ -189,8 +204,15 @@ const handleSave = async (task: any) => {
       ElMessage.success('创建成功')
     }
     loadTasks()
-  } catch (error) {
-    ElMessage.error('操作失败')
+  } catch (error: any) {
+    if (error.response?.data?.message?.includes('冲突')) {
+      ElMessageBox.alert('任务已被其他用户修改，请刷新后重试', '版本冲突', {
+        confirmButtonText: '刷新',
+        callback: () => loadTasks()
+      })
+    } else {
+      ElMessage.error('操作失败')
+    }
     loadTasks()
   }
 }
@@ -234,6 +256,25 @@ const logout = () => {
 onMounted(() => {
   loadTasks()
   loadOverdueTasks()
+  ws.connect()
+  ws.onMessage((message: any) => {
+    if (message.type === 'TASK_LOCK' || message.type === 'TASK_UNLOCK') {
+      loadTasks()
+    } else if (message.type === 'TASK_CREATE') {
+      loadTasks()
+    } else if (message.type === 'TASK_UPDATE') {
+      loadTasks()
+    } else if (message.type === 'TASK_DELETE') {
+      loadTasks()
+    }
+  })
+})
+
+onUnmounted(() => {
+  if (currentTask.id && showDialog.value) {
+    unlockTask(currentTask.id, 1)
+  }
+  ws.disconnect()
 })
 </script>
 

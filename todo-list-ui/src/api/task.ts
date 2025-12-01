@@ -29,3 +29,9 @@ export const permanentDeleteTask = (id: string) =>
 
 export const getOverdueTasks = (userId: number) =>
   request.get('/tasks/overdue', { params: { userId } })
+
+export const lockTask = (id: string, userId: number) =>
+  request.post(`/tasks/${id}/lock`, null, { params: { userId } })
+
+export const unlockTask = (id: string, userId: number) =>
+  request.post(`/tasks/${id}/unlock`, null, { params: { userId } })

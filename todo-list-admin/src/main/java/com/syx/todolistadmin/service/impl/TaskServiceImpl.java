@@ -1,35 +1,62 @@
 package com.syx.todolistadmin.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.syx.todolistadmin.entity.Task;
+import com.syx.todolistadmin.entity.TaskConflict;
 import com.syx.todolistadmin.entity.TaskRecycle;
+import com.syx.todolistadmin.mapper.TaskConflictMapper;
 import com.syx.todolistadmin.mapper.TaskMapper;
 import com.syx.todolistadmin.mapper.TaskRecycleMapper;
+import com.syx.todolistadmin.service.TaskLogService;
 import com.syx.todolistadmin.service.TaskService;
+import com.syx.todolistadmin.websocket.TaskWebSocketHandler;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
 public class TaskServiceImpl implements TaskService {
     private final TaskMapper taskMapper;
     private final TaskRecycleMapper taskRecycleMapper;
+    private final TaskLogService taskLogService;
+    private final TaskWebSocketHandler webSocketHandler;
+    private final TaskConflictMapper taskConflictMapper;
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     public Task create(Task task) {
         taskMapper.insert(task);
+        taskLogService.log(task.getId(), task.getUserId(), "CREATE", null, JSON.toJSONString(task));
+        broadcast("TASK_CREATE", task);
         return task;
     }
 
     @Override
     public Task update(Task task) {
+        Task old = taskMapper.selectById(task.getId());
+        if (old != null && !old.getVersion().equals(task.getVersion())) {
+            TaskConflict conflict = new TaskConflict();
+            conflict.setTaskId(task.getId());
+            conflict.setUserId(task.getUserId());
+            conflict.setConflictData(JSON.toJSONString(task));
+            taskConflictMapper.insert(conflict);
+            throw new RuntimeException("任务版本冲突");
+        }
         taskMapper.updateById(task);
-        return task;
+        Task updated = taskMapper.selectById(task.getId());
+        taskLogService.log(task.getId(), task.getUserId(), "UPDATE", JSON.toJSONString(old), JSON.toJSONString(updated));
+        broadcast("TASK_UPDATE", updated);
+        return updated;
     }
 
     @Override
@@ -44,11 +71,19 @@ public class TaskServiceImpl implements TaskService {
         recycle.setExpireTime(LocalDateTime.now().plusDays(15));
         taskRecycleMapper.insert(recycle);
         taskMapper.deleteById(id);
+        taskLogService.log(id, task.getUserId(), "DELETE", JSON.toJSONString(task), null);
+        broadcast("TASK_DELETE", task);
     }
 
     @Override
     public Task getById(Long id) {
-        return taskMapper.selectById(id);
+        Task task = taskMapper.selectById(id);
+        if (task != null) {
+            String key = "task:lock:" + id;
+            String lockedUserId = redisTemplate.opsForValue().get(key);
+            task.setLockedBy(lockedUserId != null ? Long.parseLong(lockedUserId) : null);
+        }
+        return task;
     }
 
     @Override
@@ -60,14 +95,26 @@ public class TaskServiceImpl implements TaskService {
         if ("priority".equals(sortBy)) wrapper.orderByDesc(Task::getPriority);
         else if ("dueDate".equals(sortBy)) wrapper.orderByAsc(Task::getDueDate);
         else wrapper.orderByDesc(Task::getCreateTime);
-        return taskMapper.selectPage(new Page<>(page, size), wrapper);
+        IPage<Task> result = taskMapper.selectPage(new Page<>(page, size), wrapper);
+        result.getRecords().forEach(task -> {
+            String key = "task:lock:" + task.getId();
+            String lockedUserId = redisTemplate.opsForValue().get(key);
+            task.setLockedBy(lockedUserId != null ? Long.parseLong(lockedUserId) : null);
+        });
+        return result;
     }
 
     @Override
     public List<Task> search(Long userId, String keyword) {
-        return taskMapper.selectList(new LambdaQueryWrapper<Task>()
+        List<Task> tasks = taskMapper.selectList(new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
                 .and(w -> w.like(Task::getTitle, keyword).or().like(Task::getDescription, keyword)));
+        tasks.forEach(task -> {
+            String key = "task:lock:" + task.getId();
+            String lockedUserId = redisTemplate.opsForValue().get(key);
+            task.setLockedBy(lockedUserId != null ? Long.parseLong(lockedUserId) : null);
+        });
+        return tasks;
     }
 
     @Override
@@ -88,6 +135,7 @@ public class TaskServiceImpl implements TaskService {
         }
         taskMapper.restoreTask(id);
         taskRecycleMapper.delete(new LambdaQueryWrapper<TaskRecycle>().eq(TaskRecycle::getTaskId, id));
+        taskLogService.log(id, task.getUserId(), "RESTORE", null, JSON.toJSONString(task));
     }
 
     @Override
@@ -102,5 +150,40 @@ public class TaskServiceImpl implements TaskService {
                 .eq(Task::getUserId, userId)
                 .ne(Task::getStatus, 2)
                 .lt(Task::getDueDate, LocalDateTime.now()));
+    }
+
+    @Override
+    public boolean lock(Long taskId, Long userId) {
+        String key = "task:lock:" + taskId;
+        Boolean success = redisTemplate.opsForValue().setIfAbsent(key, String.valueOf(userId), 5, TimeUnit.MINUTES);
+        if (Boolean.TRUE.equals(success)) {
+            Task task = taskMapper.selectById(taskId);
+            if (task != null) {
+                task.setLockedBy(userId);
+                broadcast("TASK_LOCK", task);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void unlock(Long taskId, Long userId) {
+        String key = "task:lock:" + taskId;
+        redisTemplate.delete(key);
+        Task task = taskMapper.selectById(taskId);
+        if (task != null) {
+            task.setLockedBy(null);
+            broadcast("TASK_UNLOCK", task);
+        }
+    }
+
+    private void broadcast(String type, Task task) {
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", type);
+        message.put("data", task);
+        String json = JSON.toJSONString(message);
+        System.out.println("广播消息: " + json);
+        webSocketHandler.broadcast(json);
     }
 }

@@ -1,5 +1,9 @@
 <template>
-  <div class="message-content" :class="'status-' + task.status">
+  <div class="message-content" :class="['status-' + task.status, { locked: task.lockedBy }]">
+    <div v-if="task.lockedBy" class="lock-overlay">
+      <el-icon class="lock-icon"><Lock /></el-icon>
+      <div class="lock-text">任务正在被操作...</div>
+    </div>
     <div class="breathing-light" :class="'priority-' + task.priority"></div>
     <div v-if="task.status === 1" class="ribbon ribbon-incomplete">未完成</div>
     <div v-if="task.status === 2" class="ribbon ribbon-complete">已完成</div>
@@ -16,7 +20,7 @@
           {{ formatDate(task.dueDate) }}
         </span>
       </div>
-      <div class="task-status-actions" v-if="task.status === 0">
+      <div class="task-status-actions" v-if="task.status === 0 && !task.lockedBy">
         <button class="status-btn complete" @click="$emit('toggle-status', task, 2)">
           <el-icon><Select /></el-icon>
           完成
@@ -28,13 +32,17 @@
       </div>
     </div>
     <div class="task-actions">
-      <button class="action-btn" @click="$emit('edit', task)">
+      <button class="action-btn" @click="$emit('edit', task)" :disabled="task.lockedBy">
         <el-icon><Edit /></el-icon>
         编辑
       </button>
-      <button class="action-btn delete" @click="$emit('delete', task.id)">
+      <button class="action-btn delete" @click="$emit('delete', task.id)" :disabled="task.lockedBy">
         <el-icon><Delete /></el-icon>
         删除
+      </button>
+      <button class="action-btn" @click="$router.push(`/logs/${task.id}`)">
+        <el-icon><Document /></el-icon>
+        日志
       </button>
     </div>
   </div>
@@ -42,8 +50,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Clock, Edit, Delete, Select, Close } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Clock, Edit, Delete, Select, Close, Lock, Document } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+
+const $router = useRouter()
 
 const props = defineProps<{
   task: any
@@ -256,5 +267,41 @@ const formatDate = (date: string) => {
 
 .action-btn.delete:hover {
   background: #fef2f2;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.message-content.locked {
+  position: relative;
+}
+
+.lock-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  z-index: 10;
+}
+
+.lock-icon {
+  font-size: 32px;
+  color: #fff;
+}
+
+.lock-text {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
 }
 </style>

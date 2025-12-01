@@ -16,4 +16,6 @@ public interface TaskService {
     void restore(Long id);
     void permanentDelete(Long id);
     List<Task> getOverdueTasks(Long userId);
+    boolean lock(Long taskId, Long userId);
+    void unlock(Long taskId, Long userId);
 }

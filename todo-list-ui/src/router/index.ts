@@ -22,6 +22,11 @@ const router = createRouter({
       path: '/recycle',
       name: 'RecycleBin',
       component: () => import('../views/RecycleBin.vue')
+    },
+    {
+      path: '/logs/:id',
+      name: 'LogView',
+      component: () => import('../views/LogView.vue')
     }
   ]
 })

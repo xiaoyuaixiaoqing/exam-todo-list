@@ -72,4 +72,15 @@ public class TaskController {
     public Result<java.util.List<Task>> getOverdueTasks(@RequestParam Long userId) {
         return Result.success(taskService.getOverdueTasks(userId));
     }
+
+    @PostMapping("/{id}/lock")
+    public Result<Boolean> lock(@PathVariable Long id, @RequestParam Long userId) {
+        return Result.success(taskService.lock(id, userId));
+    }
+
+    @PostMapping("/{id}/unlock")
+    public Result<Void> unlock(@PathVariable Long id, @RequestParam Long userId) {
+        taskService.unlock(id, userId);
+        return Result.success(null);
+    }
 }
