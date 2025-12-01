@@ -29,7 +29,7 @@ public class TaskCleanupScheduler {
         });
     }
 
-    @Scheduled(cron = "0 0 * * * ?")
+    @Scheduled(cron = "0 */5 * * * ?")
     public void updateOverdueTasks() {
         taskMapper.update(null, new LambdaUpdateWrapper<Task>()
                 .set(Task::getStatus, 4)

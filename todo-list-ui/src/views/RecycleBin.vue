@@ -2,7 +2,7 @@
   <div class="recycle-container">
     <div class="header">
       <div class="header-left">
-        <el-button text @click="router.push('/')" class="back-btn">
+        <el-button text @click="router.push('/home')" class="back-btn">
           <el-icon><ArrowLeft /></el-icon>
           返回
         </el-button>

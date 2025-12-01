@@ -7,7 +7,12 @@
     <el-timeline>
       <el-timeline-item v-for="log in logs" :key="log.id" :timestamp="formatTime(log.createTime)">
         <div class="log-item">
-          <div class="log-action">{{ getActionText(log.action) }}</div>
+          <div class="log-header">
+            <div class="log-action">{{ getActionText(log.action) }}</div>
+            <el-button v-if="log.action !== 'DELETE'" size="small" type="primary" link @click="handleRollback(log)">
+              回滚到此状态
+            </el-button>
+          </div>
           <div v-if="log.action === 'UPDATE' && log.oldValue && log.newValue" class="log-changes">
             <div v-for="change in getChanges(log.oldValue, log.newValue)" :key="change.field" class="change-item">
               <span class="field-name">{{ change.field }}:</span>
@@ -25,6 +30,14 @@
           <div v-else-if="log.action === 'RESTORE' && log.newValue" class="log-detail">
             从回收站恢复了任务: {{ parseTask(log.newValue).title }}
           </div>
+          <div v-else-if="log.action === 'ROLLBACK' && log.oldValue && log.newValue" class="log-changes">
+            <div v-for="change in getChanges(log.oldValue, log.newValue)" :key="change.field" class="change-item">
+              <span class="field-name">{{ change.field }}:</span>
+              <span class="old-value">{{ change.oldValue }}</span>
+              <span class="arrow">→</span>
+              <span class="new-value">{{ change.newValue }}</span>
+            </div>
+          </div>
         </div>
       </el-timeline-item>
     </el-timeline>
@@ -34,11 +47,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { getTaskLogs } from '../api/log'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getTaskLogs, rollbackToLog } from '../api/log'
 import dayjs from 'dayjs'
 
 const route = useRoute()
+const router = useRouter()
 const logs = ref([])
 
 const loadLogs = async () => {
@@ -56,7 +71,8 @@ const getActionText = (action: string) => {
     CREATE: '创建任务',
     UPDATE: '更新任务',
     DELETE: '删除任务',
-    RESTORE: '恢复任务'
+    RESTORE: '恢复任务',
+    ROLLBACK: '历史回放'
   }
   return map[action] || action
 }
@@ -114,6 +130,23 @@ const getChanges = (oldJson: string, newJson: string) => {
   return changes
 }
 
+const handleRollback = async (log: any) => {
+  try {
+    await ElMessageBox.confirm(`确认回滚到此状态？`, '历史回放', {
+      confirmButtonText: '确认回滚',
+      cancelButtonText: '取消'
+    })
+    const taskId = route.params.id as string
+    await rollbackToLog(taskId, log.id, 1)
+    ElMessage.success('回滚成功')
+    router.back()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('回滚失败')
+    }
+  }
+}
+
 onMounted(() => {
   loadLogs()
 })
@@ -142,9 +175,15 @@ onMounted(() => {
   padding: 8px 0;
 }
 
+.log-item .log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
 .log-action {
   font-weight: 600;
-  margin-bottom: 8px;
 }
 
 .log-detail {

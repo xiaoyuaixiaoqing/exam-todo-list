@@ -61,16 +61,27 @@
       </div>
 
       <div class="chat-content">
-        <el-alert v-if="overdueTasks.length > 0" type="warning" :closable="false" show-icon>
+        <el-alert v-if="!isLoading && overdueTasks.length > 0" type="warning" :closable="false" show-icon>
           您有 {{ overdueTasks.length }} 个任务已超期
           <el-button type="text" @click="viewOverdue" style="margin-left: 12px">立即查看</el-button>
         </el-alert>
-        <el-alert v-if="soonDueTasks.length > 0" type="error" :closable="false" show-icon>
+        <el-alert v-if="!isLoading && soonDueTasks.length > 0" type="error" :closable="false" show-icon>
           您有 {{ soonDueTasks.length }} 个任务还有一天截止
           <el-button type="text" @click="viewSoonDue" style="margin-left: 12px">立即查看</el-button>
         </el-alert>
 
-        <div class="message-list">
+        <div v-if="isLoading" class="skeleton-list">
+          <div v-for="index in 3" :key="index" class="skeleton-item">
+            <div class="skeleton-avatar"></div>
+            <div class="skeleton-content">
+              <div class="skeleton-title"></div>
+              <div class="skeleton-text"></div>
+              <div class="skeleton-text" style="width: 80%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="message-list">
           <div v-for="task in tasks" :key="task.id" class="message-item">
             <TaskCard
               :task="task"
@@ -81,7 +92,7 @@
           </div>
         </div>
 
-        <el-empty v-if="tasks.length === 0" description="暂无任务" />
+        <el-empty v-if="!isLoading && tasks.length === 0" description="暂无任务" />
       </div>
     </div>
 
@@ -90,6 +101,14 @@
       :task="currentTask"
       @close="closeDialog"
       @save="handleSave"
+    />
+
+    <ConflictDialog
+      :visible="showConflictDialog"
+      :my-version="conflictData.myVersion"
+      :server-version="conflictData.serverVersion"
+      @close="showConflictDialog = false"
+      @resolve="handleConflictResolve"
     />
   </div>
 </template>
@@ -104,6 +123,7 @@ import { useUserStore } from '../stores/user'
 import confetti from 'canvas-confetti'
 import TaskCard from '../components/TaskCard.vue'
 import TaskDialog from '../components/TaskDialog.vue'
+import ConflictDialog from '../components/ConflictDialog.vue'
 import { TaskWebSocket } from '../utils/websocket'
 
 const router = useRouter()
@@ -111,9 +131,12 @@ const userStore = useUserStore()
 const tasks = ref([])
 const overdueTasks = ref([])
 const showDialog = ref(false)
+const showConflictDialog = ref(false)
 const searchKeyword = ref('')
+const isLoading = ref(true)
 const filter = reactive({ category: null, status: null, priority: null, sortBy: 'createTime' })
 const currentTask = reactive({ id: null, title: '', description: '', category: '工作', status: 0, priority: 1, dueDate: null, userId: 1 })
+const conflictData = reactive({ myVersion: {}, serverVersion: {} })
 const ws = new TaskWebSocket()
 
 const soonDueTasks = computed(() => {
@@ -144,13 +167,17 @@ const viewSoonDue = () => {
 }
 
 const loadTasks = async () => {
-  const params: any = { userId: 1, page: 1, size: 100 }
-  if (filter.category) params.category = filter.category
-  if (filter.status !== null) params.status = filter.status
-  if (filter.priority) params.priority = filter.priority
-  if (filter.sortBy) params.sortBy = filter.sortBy
-  const res: any = await getTasks(params)
-  tasks.value = res.data.records
+  try {
+    const params: any = { userId: 1, page: 1, size: 100 }
+    if (filter.category) params.category = filter.category
+    if (filter.status !== null) params.status = filter.status
+    if (filter.priority) params.priority = filter.priority
+    if (filter.sortBy) params.sortBy = filter.sortBy
+    const res: any = await getTasks(params)
+    tasks.value = res.data.records
+  } finally {
+    isLoading.value = false
+  }
 }
 
 const handleSearch = async () => {
@@ -206,13 +233,35 @@ const handleSave = async (task: any) => {
     loadTasks()
   } catch (error: any) {
     if (error.response?.data?.message?.includes('冲突')) {
-      ElMessageBox.alert('任务已被其他用户修改，请刷新后重试', '版本冲突', {
-        confirmButtonText: '刷新',
-        callback: () => loadTasks()
-      })
+      const serverTask = tasks.value.find((t: any) => t.id === task.id)
+      if (serverTask) {
+        Object.assign(conflictData.myVersion, task)
+        Object.assign(conflictData.serverVersion, serverTask)
+        showConflictDialog.value = true
+      } else {
+        ElMessage.error('操作失败，请刷新后重试')
+        loadTasks()
+      }
     } else {
       ElMessage.error('操作失败')
+      loadTasks()
     }
+  }
+}
+
+const handleConflictResolve = async (choice: string) => {
+  showConflictDialog.value = false
+  const taskToSave = choice === 'mine' ? conflictData.myVersion : conflictData.serverVersion
+  try {
+    await loadTasks()
+    const latestTask = tasks.value.find((t: any) => t.id === taskToSave.id)
+    if (latestTask) {
+      await updateTask(taskToSave.id, { ...taskToSave, version: latestTask.version })
+      ElMessage.success('已保留' + (choice === 'mine' ? '我的修改' : '服务器版本'))
+      loadTasks()
+    }
+  } catch {
+    ElMessage.error('解决冲突失败')
     loadTasks()
   }
 }
@@ -416,5 +465,78 @@ onUnmounted(() => {
 :deep(.el-alert) {
   border-radius: 12px;
   margin-bottom: 24px;
+}
+
+/* 骨架屏样式 */
+.skeleton-list {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.skeleton-item {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #ececec;
+  animation: fadeIn 0.6s ease-in-out;
+}
+
+.skeleton-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.skeleton-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-title {
+  height: 20px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  width: 60%;
+}
+
+.skeleton-text {
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

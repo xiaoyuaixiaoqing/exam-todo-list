@@ -38,7 +38,7 @@ const handleLogin = async () => {
     const res: any = await login(form)
     userStore.setToken(res.data)
     ElMessage.success('登录成功')
-    router.push('/')
+    router.push('/home')
   } catch (error) {
     ElMessage.error('登录失败')
   }

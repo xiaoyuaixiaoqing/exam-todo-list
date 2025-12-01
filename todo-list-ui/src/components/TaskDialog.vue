@@ -29,7 +29,7 @@
         </el-select>
       </el-form-item>
       <el-form-item label="截止日期">
-        <el-date-picker v-model="task.dueDate" type="datetime" style="width: 100%" />
+        <el-date-picker v-model="task.dueDate" type="datetime" style="width: 100%" :disabledDate="disabledDate" />
       </el-form-item>
     </el-form>
     <template #footer>
@@ -49,4 +49,8 @@ defineEmits<{
   close: []
   save: [task: any]
 }>()
+
+const disabledDate = (time: Date) => {
+  return time.getTime() < new Date().getTime()
+}
 </script>
