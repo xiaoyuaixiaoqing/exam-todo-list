@@ -1,6 +1,8 @@
 package com.syx.todolistadmin.scheduled;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.syx.todolistadmin.entity.Task;
 import com.syx.todolistadmin.entity.TaskRecycle;
 import com.syx.todolistadmin.mapper.TaskMapper;
 import com.syx.todolistadmin.mapper.TaskRecycleMapper;
@@ -25,5 +27,14 @@ public class TaskCleanupScheduler {
             taskMapper.deleteById(r.getTaskId());
             taskRecycleMapper.deleteById(r.getId());
         });
+    }
+
+    @Scheduled(cron = "0 0 * * * ?")
+    public void updateOverdueTasks() {
+        taskMapper.update(null, new LambdaUpdateWrapper<Task>()
+                .set(Task::getStatus, 4)
+                .lt(Task::getDueDate, LocalDateTime.now())
+                .in(Task::getStatus, 0, 1)
+                .eq(Task::getIsDeleted, 1));
     }
 }
