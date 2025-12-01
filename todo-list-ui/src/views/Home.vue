@@ -44,8 +44,9 @@
         </el-select>
         <el-select v-model="filter.status" placeholder="状态" clearable @change="loadTasks" size="default">
           <el-option label="待办" :value="0" />
-          <el-option label="进行中" :value="1" />
+          <el-option label="未完成" :value="1" />
           <el-option label="已完成" :value="2" />
+          <el-option label="已超期" :value="4" />
         </el-select>
         <el-select v-model="filter.priority" placeholder="优先级" clearable @change="loadTasks" size="default">
           <el-option label="低" :value="1" />
@@ -62,27 +63,42 @@
       <div class="chat-content">
         <el-alert v-if="overdueTasks.length > 0" type="warning" :closable="false" show-icon>
           您有 {{ overdueTasks.length }} 个任务已超期
+          <el-button type="text" @click="viewOverdue" style="margin-left: 12px">立即查看</el-button>
+        </el-alert>
+        <el-alert v-if="soonDueTasks.length > 0" type="error" :closable="false" show-icon>
+          您有 {{ soonDueTasks.length }} 个任务还有一天截止
+          <el-button type="text" @click="viewSoonDue" style="margin-left: 12px">立即查看</el-button>
         </el-alert>
 
         <div class="message-list">
           <div v-for="task in tasks" :key="task.id" class="message-item">
-            <div class="message-content">
+            <div class="message-content" :class="'status-' + task.status">
+              <div class="breathing-light" :class="'priority-' + task.priority"></div>
+              <div v-if="task.status === 1" class="ribbon ribbon-incomplete">未完成</div>
+              <div v-if="task.status === 2" class="ribbon ribbon-complete">已完成</div>
+              <div v-if="isOverdue(task)" class="ribbon ribbon-overdue">已超期</div>
               <div class="task-header">
                 <h3>{{ task.title }}</h3>
-                <el-tag :type="['info', '', 'success'][task.status]" size="small" effect="plain">
-                  {{ ['待办', '进行中', '已完成'][task.status] }}
-                </el-tag>
               </div>
               <p class="task-desc">{{ task.description || '暂无描述' }}</p>
-              <div class="task-meta">
-                <el-tag size="small" effect="plain">{{ task.category }}</el-tag>
-                <el-tag :type="['info', 'warning', 'danger'][task.priority - 1]" size="small" effect="plain">
-                  {{ ['低', '中', '高'][task.priority - 1] }}
-                </el-tag>
-                <span class="task-date" v-if="task.dueDate">
-                  <el-icon><Clock /></el-icon>
-                  {{ task.dueDate }}
-                </span>
+              <div class="task-meta-wrapper">
+                <div class="task-meta">
+                  <el-tag size="small" effect="plain">{{ task.category }}</el-tag>
+                  <span class="task-date" v-if="task.dueDate">
+                    <el-icon><Clock /></el-icon>
+                    {{ formatDate(task.dueDate) }}
+                  </span>
+                </div>
+                <div class="task-status-actions" v-if="task.status === 0">
+                  <button class="status-btn complete" @click="toggleStatus(task, 2)">
+                    <el-icon><Select /></el-icon>
+                    完成
+                  </button>
+                  <button class="status-btn incomplete" @click="toggleStatus(task, 1)">
+                    <el-icon><Close /></el-icon>
+                    未完成
+                  </button>
+                </div>
               </div>
               <div class="task-actions">
                 <button class="action-btn" @click="editTask(task)">
@@ -117,10 +133,10 @@
             <el-option label="生活" value="生活" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item label="状态" v-if="currentTask.id">
           <el-select v-model="currentTask.status" style="width: 100%">
             <el-option label="待办" :value="0" />
-            <el-option label="进行中" :value="1" />
+            <el-option label="未完成" :value="1" />
             <el-option label="已完成" :value="2" />
           </el-select>
         </el-form-item>
@@ -144,12 +160,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { EditPen, Delete, User, Search, Clock, Edit } from '@element-plus/icons-vue'
+import { EditPen, Delete, User, Search, Clock, Edit, Select, Close } from '@element-plus/icons-vue'
 import { getTasks, createTask, updateTask, deleteTask, searchTasks, getOverdueTasks } from '../api/task'
 import { useUserStore } from '../stores/user'
+import dayjs from 'dayjs'
+import confetti from 'canvas-confetti'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -159,6 +177,38 @@ const showDialog = ref(false)
 const searchKeyword = ref('')
 const filter = reactive({ category: null, status: null, priority: null, sortBy: 'createTime' })
 const currentTask = reactive({ id: null, title: '', description: '', category: '工作', status: 0, priority: 1, dueDate: null, userId: 1 })
+
+const soonDueTasks = computed(() => {
+  const now = new Date().getTime()
+  const oneDayMs = 86400000
+  return tasks.value.filter((task: any) => {
+    if (task.status === 2 || !task.dueDate) return false
+    const dueTime = new Date(task.dueDate).getTime()
+    return dueTime > now && dueTime - now <= oneDayMs
+  })
+})
+
+const isOverdue = (task: any) => {
+  if (task.status === 2 || !task.dueDate) return false
+  return new Date(task.dueDate).getTime() < new Date().getTime()
+}
+
+const viewOverdue = () => {
+  filter.category = null
+  filter.priority = null
+  filter.status = 4
+  searchKeyword.value = ''
+  loadTasks()
+}
+
+const viewSoonDue = () => {
+  filter.category = null
+  filter.priority = null
+  filter.status = null
+  filter.sortBy = 'dueDate'
+  searchKeyword.value = ''
+  loadTasks()
+}
 
 const loadTasks = async () => {
   const params: any = { userId: 1, page: 1, size: 100 }
@@ -207,6 +257,23 @@ const handleDelete = async (id: string) => {
   await deleteTask(id)
   ElMessage.success('已移至回收站')
   loadTasks()
+}
+
+const toggleStatus = async (task: any, status: number) => {
+  await updateTask(task.id, { ...task, status })
+  if (status === 2) {
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 }
+    })
+  }
+  ElMessage.success(status === 2 ? '完成！！！' : '未完成！！！')
+  loadTasks()
+}
+
+const formatDate = (date: string) => {
+  return dayjs(date).format('YYYY-MM-DD HH:mm')
 }
 
 const logout = () => {
@@ -357,7 +424,76 @@ onMounted(() => {
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0 0 0 1px #d1d1d1;
-  padding: 16px 20px;
+  padding: 16px 20px 16px 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+.ribbon {
+  position: absolute;
+  top: 12px;
+  right: -35px;
+  width: 110px;
+  padding: 6px 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  transform: rotate(45deg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  letter-spacing: 1px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.ribbon-incomplete {
+  background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.ribbon-complete {
+  background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.ribbon-overdue {
+  background: linear-gradient(135deg, #ef5350 0%, #e53935 100%);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.breathing-light {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: breathe 2s ease-in-out infinite;
+}
+
+.breathing-light.priority-1 {
+  background: #67c23a;
+  box-shadow: 0 0 8px #67c23a;
+}
+
+.breathing-light.priority-2 {
+  background: #e6a23c;
+  box-shadow: 0 0 8px #e6a23c;
+}
+
+.breathing-light.priority-3 {
+  background: #f56c6c;
+  box-shadow: 0 0 8px #f56c6c;
+}
+
+@keyframes breathe {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
 }
 
 .task-header {
@@ -374,6 +510,50 @@ onMounted(() => {
   color: #202123;
 }
 
+.task-status-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.task-meta-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.status-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: none;
+  font-size: 13px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.status-btn.complete {
+  background: #67c23a;
+}
+
+.status-btn.complete:hover {
+  background: #85ce61;
+  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.3);
+}
+
+.status-btn.incomplete {
+  background: #e6a23c;
+}
+
+.status-btn.incomplete:hover {
+  background: #ebb563;
+  box-shadow: 0 2px 8px rgba(230, 162, 60, 0.3);
+}
+
 .task-desc {
   margin: 0 0 12px 0;
   font-size: 14px;
@@ -385,7 +565,6 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   align-items: center;
-  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 
@@ -401,6 +580,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   padding-top: 12px;
+  padding-bottom: 12px;
   border-top: 1px solid #e5e5e5;
 }
 

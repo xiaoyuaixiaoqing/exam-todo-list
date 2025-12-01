@@ -55,7 +55,13 @@ public class TaskServiceImpl implements TaskService {
     public IPage<Task> list(Long userId, Integer page, Integer size, String category, Integer status, Integer priority, String sortBy) {
         LambdaQueryWrapper<Task> wrapper = new LambdaQueryWrapper<Task>().eq(Task::getUserId, userId);
         if (category != null) wrapper.eq(Task::getCategory, category);
-        if (status != null) wrapper.eq(Task::getStatus, status);
+        if (status != null) {
+            if (status == 4) {
+                wrapper.ne(Task::getStatus, 2).lt(Task::getDueDate, LocalDateTime.now());
+            } else {
+                wrapper.eq(Task::getStatus, status);
+            }
+        }
         if (priority != null) wrapper.eq(Task::getPriority, priority);
         if ("priority".equals(sortBy)) wrapper.orderByDesc(Task::getPriority);
         else if ("dueDate".equals(sortBy)) wrapper.orderByAsc(Task::getDueDate);

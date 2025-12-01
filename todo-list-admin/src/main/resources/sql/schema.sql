@@ -119,3 +119,21 @@ CREATE TABLE IF NOT EXISTS `notification` (
   INDEX `idx_status` (`status`),
   INDEX `idx_send_time` (`send_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知表';
+
+-- 9. 任务状态字典表
+CREATE TABLE IF NOT EXISTS `task_status_dict` (
+  `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '字典ID',
+  `status_code` TINYINT NOT NULL UNIQUE COMMENT '状态码',
+  `status_name` VARCHAR(50) NOT NULL COMMENT '状态名称',
+  `description` VARCHAR(200) COMMENT '状态描述',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  INDEX `idx_status_code` (`status_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务状态字典表';
+
+-- 插入任务状态字典数据
+INSERT INTO `task_status_dict` (`status_code`, `status_name`, `description`) VALUES
+(0, '待办', '任务已创建，等待开始'),
+(1, '未完成', '任务进行中但未完成'),
+(2, '已完成', '任务已完成'),
+(4, '已超期', '任务截止日期已过且未完成')
+ON DUPLICATE KEY UPDATE `status_name` = VALUES(`status_name`), `description` = VALUES(`description`);
