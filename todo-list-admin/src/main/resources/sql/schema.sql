@@ -91,6 +91,19 @@ CREATE TABLE IF NOT EXISTS `task_recycle` (
   INDEX `idx_expire_time` (`expire_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='回收站表';
 
+-- 6.1 团队回收站表
+CREATE TABLE IF NOT EXISTS `team_recycle` (
+  `id` BIGINT NOT NULL PRIMARY KEY COMMENT '团队回收站ID',
+  `task_id` BIGINT NOT NULL COMMENT '任务ID',
+  `team_id` BIGINT NOT NULL COMMENT '团队ID',
+  `deleted_by` BIGINT NOT NULL COMMENT '删除用户ID',
+  `deleted_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '删除时间',
+  `expire_time` DATETIME NOT NULL COMMENT '过期时间（删除时间+15天）',
+  UNIQUE KEY `uk_task_team` (`task_id`, `team_id`),
+  INDEX `idx_team_id` (`team_id`),
+  INDEX `idx_expire_time` (`expire_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='团队回收站表';
+
 -- 7. 冲突记录表
 CREATE TABLE IF NOT EXISTS `task_conflict` (
   `id` BIGINT NOT NULL PRIMARY KEY COMMENT '冲突ID',

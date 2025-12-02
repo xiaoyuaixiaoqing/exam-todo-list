@@ -35,6 +35,24 @@ const router = createRouter({
       name: 'LogView',
       component: () => import('../views/LogView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/teams',
+      name: 'TeamManage',
+      component: () => import('../views/TeamManage.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/teams/:id/tasks',
+      name: 'TeamTaskView',
+      component: () => import('../views/TeamTaskView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/teams/:id/recycle',
+      name: 'TeamRecycleBin',
+      component: () => import('../views/TeamRecycleBin.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

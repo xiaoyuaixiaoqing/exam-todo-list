@@ -8,4 +8,5 @@ export interface Task {
   dueDate?: string | null
   userId: number
   version?: number
+  lockedBy?: string | null
 }

@@ -9,6 +9,10 @@
       </div>
 
       <div class="nav-items">
+        <div class="nav-item" @click="$router.push('/teams')">
+          <el-icon><User /></el-icon>
+          <span>团队管理</span>
+        </div>
         <div class="nav-item" @click="$router.push('/recycle')">
           <el-icon><Delete /></el-icon>
           <span>回收站</span>
@@ -37,6 +41,7 @@
       </div>
 
       <div class="filter-bar">
+        <el-checkbox v-model="batchMode" @change="handleBatchModeChange">批量操作</el-checkbox>
         <el-select v-model="filter.category" placeholder="分类" clearable @change="loadTasks" size="default">
           <el-option label="工作" value="工作" />
           <el-option label="学习" value="学习" />
@@ -58,6 +63,25 @@
           <el-option label="优先级" value="priority" />
           <el-option label="截止日期" value="dueDate" />
         </el-select>
+        <div style="flex: 1"></div>
+        <div class="import-export-group">
+          <el-button size="default" @click="handleImport" class="import-btn">
+            <el-icon><Upload /></el-icon>
+            导入
+          </el-button>
+          <el-button size="default" @click="handleExport" class="export-btn">
+            <el-icon><Download /></el-icon>
+            导出
+          </el-button>
+        </div>
+        <input ref="fileInput" type="file" accept=".xlsx" style="display: none" @change="handleFileChange" />
+      </div>
+
+      <div v-if="batchMode && selectedIds.length > 0" class="batch-actions">
+        <span>已选择 {{ selectedIds.length }} 项</span>
+        <el-button size="default" type="primary" @click="handleBatchStatus(2)">标记完成</el-button>
+        <el-button size="default" @click="handleBatchStatus(0)">标记待办</el-button>
+        <el-button size="default" type="danger" @click="handleBatchDelete">批量删除</el-button>
       </div>
 
       <div class="chat-content">
@@ -83,6 +107,7 @@
 
         <div v-else class="message-list">
           <div v-for="task in tasks" :key="task.id" class="message-item">
+            <el-checkbox v-if="batchMode" v-model="selectedIds" :value="task.id" style="margin-right: 12px" />
             <TaskCard
               :task="task"
               @edit="openDialog"
@@ -117,8 +142,8 @@
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { EditPen, Delete, User, Search } from '@element-plus/icons-vue'
-import { getTasks, createTask, updateTask, deleteTask, searchTasks, getOverdueTasks, lockTask, unlockTask } from '../api/task'
+import { EditPen, Delete, User, Search, Download, Upload } from '@element-plus/icons-vue'
+import { getTasks, createTask, updateTask, deleteTask, searchTasks, getOverdueTasks, lockTask, unlockTask, batchDeleteTasks, batchUpdateStatus, importTasks, exportTasks } from '../api/task'
 import { useUserStore } from '../stores/user'
 import confetti from 'canvas-confetti'
 import TaskCard from '../components/TaskCard.vue'
@@ -139,6 +164,9 @@ const filter = reactive({ category: null, status: null, priority: null, sortBy: 
 const currentTask = reactive({ id: null, title: '', description: '', category: '工作', status: 0, priority: 1, dueDate: null, userId: 1 })
 const conflictData = reactive({ myVersion: {}, serverVersion: {} })
 const ws = new TaskWebSocket()
+const batchMode = ref(false)
+const selectedIds = ref<number[]>([])
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const soonDueTasks = computed(() => {
   const now = new Date().getTime()
@@ -169,7 +197,7 @@ const viewSoonDue = () => {
 
 const loadTasks = async () => {
   try {
-    const params: any = { userId: 1, page: 1, size: 100 }
+    const params: any = { page: 1, size: 100 }
     if (filter.category) params.category = filter.category
     if (filter.status !== null) params.status = filter.status
     if (filter.priority) params.priority = filter.priority
@@ -183,7 +211,7 @@ const loadTasks = async () => {
 
 const handleSearch = async () => {
   if (searchKeyword.value) {
-    const res: any = await searchTasks({ userId: 1, keyword: searchKeyword.value })
+    const res: any = await searchTasks(searchKeyword.value)
     tasks.value = res.data
   } else {
     loadTasks()
@@ -191,7 +219,7 @@ const handleSearch = async () => {
 }
 
 const loadOverdueTasks = async () => {
-  const res: any = await getOverdueTasks(1)
+  const res: any = await getOverdueTasks()
   overdueTasks.value = res.data
 }
 
@@ -199,7 +227,7 @@ const openDialog = async (task?: any) => {
   if (task) {
     Object.assign(currentTask, task)
     if (task.id) {
-      const res: any = await lockTask(task.id, 1)
+      const res: any = await lockTask(task.id)
       if (!res.data) {
         ElMessage.warning('任务正在被其他用户编辑')
         return
@@ -213,14 +241,14 @@ const openDialog = async (task?: any) => {
 
 const closeDialog = async () => {
   if (currentTask.id) {
-    await unlockTask(currentTask.id, 1)
+    await unlockTask(currentTask.id)
   }
   showDialog.value = false
 }
 
 const handleSave = async (task: any) => {
   if (task.id) {
-    unlockTask(task.id, 1)
+    unlockTask(task.id)
   }
   showDialog.value = false
   try {
@@ -296,6 +324,51 @@ const toggleStatus = async (task: any, status: number) => {
     task.status = oldStatus
     ElMessage.error('操作失败')
   })
+}
+
+const handleBatchModeChange = () => {
+  selectedIds.value = []
+}
+
+const handleBatchDelete = async () => {
+  await ElMessageBox.confirm(`确定删除选中的 ${selectedIds.value.length} 个任务吗？`, '提示', { type: 'warning' })
+  await batchDeleteTasks(selectedIds.value)
+  ElMessage.success('批量删除成功')
+  selectedIds.value = []
+  loadTasks()
+}
+
+const handleBatchStatus = async (status: number) => {
+  await batchUpdateStatus(selectedIds.value, status)
+  ElMessage.success('批量更新成功')
+  selectedIds.value = []
+  loadTasks()
+}
+
+const handleImport = () => {
+  fileInput.value?.click()
+}
+
+const handleFileChange = async (e: Event) => {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (file) {
+    await importTasks(file)
+    ElMessage.success('导入成功')
+    loadTasks()
+    target.value = ''
+  }
+}
+
+const handleExport = async () => {
+  const res: any = await exportTasks()
+  const blob = new Blob([res], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = '任务列表.xlsx'
+  a.click()
+  window.URL.revokeObjectURL(url)
 }
 
 const logout = () => {
@@ -439,6 +512,15 @@ onUnmounted(() => {
   padding: 8px 12px;
 }
 
+.batch-actions {
+  padding: 12px 24px;
+  border-bottom: 1px solid #ececec;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: #f5f5f5;
+}
+
 .chat-content {
   flex: 1;
   overflow-y: auto;
@@ -461,6 +543,26 @@ onUnmounted(() => {
 :deep(.el-input__wrapper) {
   box-shadow: 0 0 0 1px #d1d1d1;
   padding: 6px 16px;
+}
+
+:deep(.el-alert) {
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.import-export-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.import-btn,
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+  font-weight: 500;
 }
 
 :deep(.el-alert) {

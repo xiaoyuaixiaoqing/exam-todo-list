@@ -15,11 +15,11 @@ export const updateTask = (id: string, data: any) =>
 export const deleteTask = (id: string) =>
   request.delete(`/tasks/${id}`)
 
-export const searchTasks = (params: { userId: number; keyword: string }) =>
-  request.get('/tasks/search', { params })
+export const searchTasks = (keyword: string) =>
+  request.get('/tasks/search', { params: { keyword } })
 
-export const getRecycleBin = (userId: number) =>
-  request.get('/tasks/recycle', { params: { userId } })
+export const getRecycleBin = () =>
+  request.get('/tasks/recycle')
 
 export const restoreTask = (id: string) =>
   request.post(`/tasks/recycle/${id}/restore`)
@@ -27,11 +27,34 @@ export const restoreTask = (id: string) =>
 export const permanentDeleteTask = (id: string) =>
   request.delete(`/tasks/recycle/${id}`)
 
-export const getOverdueTasks = (userId: number) =>
-  request.get('/tasks/overdue', { params: { userId } })
+export const getOverdueTasks = () =>
+  request.get('/tasks/overdue')
 
-export const lockTask = (id: string, userId: number) =>
-  request.post(`/tasks/${id}/lock`, null, { params: { userId } })
+export const lockTask = (id: string) =>
+  request.post(`/tasks/${id}/lock`)
 
-export const unlockTask = (id: string, userId: number) =>
-  request.post(`/tasks/${id}/unlock`, null, { params: { userId } })
+export const unlockTask = (id: string) =>
+  request.post(`/tasks/${id}/unlock`)
+
+export const batchDeleteTasks = (ids: number[]) =>
+  request.post('/tasks/batch/delete', ids)
+
+export const batchUpdateStatus = (ids: number[], status: number) =>
+  request.post('/tasks/batch/status', { ids, status })
+
+export const importTasks = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/tasks/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+export const exportTasks = () =>
+  request.get('/tasks/export', { responseType: 'blob' })
+
+export const lockTeamTask = (id: string) =>
+  request.post(`/tasks/team/${id}/lock`)
+
+export const unlockTeamTask = (id: string) =>
+  request.post(`/tasks/team/${id}/unlock`)

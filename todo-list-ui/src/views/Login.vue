@@ -5,17 +5,38 @@
       <p class="subtitle">欢迎回来</p>
       <el-form :model="form" @submit.prevent="handleLogin" class="login-form">
         <el-form-item>
-          <el-input v-model="form.username" placeholder="用户名" size="large" />
+          <el-input 
+            v-model="form.username" 
+            placeholder="用户名" 
+            size="large"
+            :disabled="isLoading"
+          />
         </el-form-item>
         <el-form-item>
-          <el-input v-model="form.password" type="password" placeholder="密码" size="large" />
+          <el-input 
+            v-model="form.password" 
+            type="password" 
+            placeholder="密码" 
+            size="large"
+            :disabled="isLoading"
+            @keyup.enter="handleLogin"
+          />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" native-type="submit" size="large" style="width: 100%">登录</el-button>
+          <el-button 
+            type="primary" 
+            native-type="submit" 
+            size="large" 
+            style="width: 100%"
+            :loading="isLoading"
+            :disabled="isLoading || !form.username || !form.password"
+          >
+            {{ isLoading ? '登录中...' : '登录' }}
+          </el-button>
         </el-form-item>
         <div class="register-link">
           <span>还没有账号？</span>
-          <router-link to="/register">立即注册</router-link>
+          <router-link to="/register" :class="{ disabled: isLoading }">立即注册</router-link>
         </div>
       </el-form>
     </div>
@@ -23,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { login } from '../api/auth'
@@ -32,15 +53,36 @@ import { useUserStore } from '../stores/user'
 const router = useRouter()
 const userStore = useUserStore()
 const form = reactive({ username: '', password: '' })
+const isLoading = ref(false)
 
 const handleLogin = async () => {
+  // 输入验证
+  if (!form.username.trim()) {
+    ElMessage.warning('请输入用户名')
+    return
+  }
+  if (!form.password.trim()) {
+    ElMessage.warning('请输入密码')
+    return
+  }
+  
+  isLoading.value = true
   try {
     const res: any = await login(form)
+    // 保存token到store
     userStore.setToken(res.data)
-    ElMessage.success('登录成功')
-    router.push('/home')
-  } catch (error) {
-    ElMessage.error('登录失败')
+    ElMessage.success('登录成功，正在跳转...')
+    
+    // 使用setTimeout模拟实际的数据加载延迟，给用户反馈
+    setTimeout(() => {
+      router.push('/home')
+    }, 500)
+  } catch (error: any) {
+    // 显示具体的错误信息
+    const errorMsg = error.response?.data?.message || '登录失败，请检查用户名和密码'
+    ElMessage.error(errorMsg)
+  } finally {
+    isLoading.value = false
   }
 }
 </script>
@@ -110,9 +152,16 @@ const handleLogin = async () => {
   color: #10a37f;
   text-decoration: none;
   margin-left: 4px;
+  transition: all 0.3s ease;
 }
 
 .register-link a:hover {
   text-decoration: underline;
+}
+
+.register-link a.disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 </style>

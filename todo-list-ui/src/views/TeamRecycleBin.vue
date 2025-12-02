@@ -2,11 +2,11 @@
   <div class="recycle-container">
     <div class="header">
       <div class="header-left">
-        <el-button text @click="router.push('/home')" class="back-btn">
+        <el-button text @click="router.push(`/teams/${currentTeamId}/tasks`)" class="back-btn">
           <el-icon><ArrowLeft /></el-icon>
           返回
         </el-button>
-        <h2>回收站</h2>
+        <h2>{{ teamName }} - 回收站</h2>
       </div>
     </div>
 
@@ -54,34 +54,58 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Delete, RefreshRight } from '@element-plus/icons-vue'
-import { getRecycleBin, restoreTask, permanentDeleteTask } from '../api/task'
+import { getTeamRecycleBin, permanentDeleteTeamTask, restoreTeamTask, getTeam } from '../api/team'
 import type { Task } from '../types/task'
 
 const router = useRouter()
+const route = useRoute()
+const currentTeamId = ref<string | number>(route.params.id as string)
+const teamName = ref('团队')
 const tasks = ref<Task[]>([])
 
+const loadTeam = async () => {
+  try {
+    const res = await getTeam(currentTeamId.value)
+    teamName.value = res.data?.name || '团队'
+  } catch (error) {
+    ElMessage.error('获取团队信息失败')
+  }
+}
+
 const loadTasks = async () => {
-  const res: any = await getRecycleBin()
-  tasks.value = res.data
+  try {
+    const res: any = await getTeamRecycleBin(currentTeamId.value)
+    tasks.value = res.data || []
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.message || '加载回收站失败，可能您不是团队所有者')
+  }
 }
 
-const handleRestore = async (id: string) => {
-  await restoreTask(id)
-  ElMessage.success('恢复成功')
+const handleRestore = async (taskId: string) => {
+  try {
+    await ElMessageBox.confirm('确认恢复此任务吗？', '提示', { type: 'info' })
+    await restoreTeamTask(currentTeamId.value, taskId)
+    ElMessage.success('恢复成功')
+    loadTasks()
+  } catch {}
+}
+
+const handlePermanentDelete = async (taskId: string) => {
+  try {
+    await ElMessageBox.confirm('确认永久删除？此操作不可恢复！', '警告', { type: 'warning' })
+    await permanentDeleteTeamTask(currentTeamId.value, taskId)
+    ElMessage.success('永久删除成功')
+    loadTasks()
+  } catch {}
+}
+
+onMounted(() => {
+  loadTeam()
   loadTasks()
-}
-
-const handlePermanentDelete = async (id: string) => {
-  await ElMessageBox.confirm('确认永久删除？此操作不可恢复！', '警告', { type: 'warning' })
-  await permanentDeleteTask(id)
-  ElMessage.success('永久删除成功')
-  loadTasks()
-}
-
-onMounted(loadTasks)
+})
 </script>
 
 <style scoped>

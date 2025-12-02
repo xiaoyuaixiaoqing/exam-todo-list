@@ -5,16 +5,14 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("team_member")
-public class TeamMember {
+@TableName("team_recycle")
+public class TeamRecycle {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
+    private Long taskId;
     private Long teamId;
-    private Long userId;
-    private Integer role;
+    private Long deletedBy;
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
-    
-    @TableField(exist = false)
-    private Boolean isOnline;  // 是否在线（非数据库字段）
+    private LocalDateTime deletedTime;
+    private LocalDateTime expireTime;
 }
