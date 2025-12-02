@@ -125,11 +125,12 @@ import TaskCard from '../components/TaskCard.vue'
 import TaskDialog from '../components/TaskDialog.vue'
 import ConflictDialog from '../components/ConflictDialog.vue'
 import { TaskWebSocket } from '../utils/websocket'
+import type { Task } from '../types/task'
 
 const router = useRouter()
 const userStore = useUserStore()
-const tasks = ref([])
-const overdueTasks = ref([])
+const tasks = ref<Task[]>([])
+const overdueTasks = ref<Task[]>([])
 const showDialog = ref(false)
 const showConflictDialog = ref(false)
 const searchKeyword = ref('')

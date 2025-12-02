@@ -51,10 +51,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getTaskLogs, rollbackToLog } from '../api/log'
 import dayjs from 'dayjs'
+import type { TaskLog } from '../types/log'
 
 const route = useRoute()
 const router = useRouter()
-const logs = ref([])
+const logs = ref<TaskLog[]>([])
 
 const loadLogs = async () => {
   const taskId = route.params.id as string

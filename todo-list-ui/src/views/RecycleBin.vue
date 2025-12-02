@@ -58,9 +58,10 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Delete, RefreshRight } from '@element-plus/icons-vue'
 import { getRecycleBin, restoreTask, permanentDeleteTask } from '../api/task'
+import type { Task } from '../types/task'
 
 const router = useRouter()
-const tasks = ref([])
+const tasks = ref<Task[]>([])
 
 const loadTasks = async () => {
   const res: any = await getRecycleBin(1)
