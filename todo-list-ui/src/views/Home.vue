@@ -17,6 +17,10 @@
           <el-icon><Delete /></el-icon>
           <span>回收站</span>
         </div>
+        <div class="nav-item" @click="$router.push('/settings')">
+          <el-icon><Setting /></el-icon>
+          <span>设置</span>
+        </div>
         <div class="nav-item" @click="logout">
           <el-icon><User /></el-icon>
           <span>退出登录</span>
@@ -27,16 +31,20 @@
     <div class="main-area">
       <div class="chat-header">
         <h1>待办事项</h1>
-        <div class="header-search">
-          <el-input
-            v-model="searchKeyword"
-            placeholder="搜索任务..."
-            @input="handleSearch"
-            clearable
-            size="default"
-          >
-            <template #prefix><el-icon><Search /></el-icon></template>
-          </el-input>
+        <div class="header-actions">
+          <el-button @click="openVoiceInput" :icon="Microphone" circle title="语音输入" />
+          <NotificationCenter ref="notificationCenter" />
+          <div class="header-search">
+            <el-input
+              v-model="searchKeyword"
+              placeholder="搜索任务..."
+              @input="handleSearch"
+              clearable
+              size="default"
+            >
+              <template #prefix><el-icon><Search /></el-icon></template>
+            </el-input>
+          </div>
         </div>
       </div>
 
@@ -135,6 +143,8 @@
       @close="showConflictDialog = false"
       @resolve="handleConflictResolve"
     />
+
+    <VoiceInput ref="voiceInputRef" @task-created="handleVoiceTaskCreated" />
   </div>
 </template>
 
@@ -142,14 +152,17 @@
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { EditPen, Delete, User, Search, Download, Upload } from '@element-plus/icons-vue'
+import { EditPen, Delete, User, Search, Download, Upload, Microphone, Setting } from '@element-plus/icons-vue'
 import { getTasks, createTask, updateTask, deleteTask, searchTasks, getOverdueTasks, lockTask, unlockTask, batchDeleteTasks, batchUpdateStatus, importTasks, exportTasks } from '../api/task'
 import { useUserStore } from '../stores/user'
 import confetti from 'canvas-confetti'
 import TaskCard from '../components/TaskCard.vue'
 import TaskDialog from '../components/TaskDialog.vue'
 import ConflictDialog from '../components/ConflictDialog.vue'
+import VoiceInput from '../components/VoiceInput.vue'
+import NotificationCenter from '../components/NotificationCenter.vue'
 import { TaskWebSocket } from '../utils/websocket'
+import { classifyTask } from '../api/ai'
 import type { Task } from '../types/task'
 
 const router = useRouter()
@@ -167,6 +180,8 @@ const ws = new TaskWebSocket()
 const batchMode = ref(false)
 const selectedIds = ref<number[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
+const voiceInputRef = ref<InstanceType<typeof VoiceInput> | null>(null)
+const notificationCenter = ref<InstanceType<typeof NotificationCenter> | null>(null)
 
 const soonDueTasks = computed(() => {
   const now = new Date().getTime()
@@ -215,6 +230,41 @@ const handleSearch = async () => {
     tasks.value = res.data
   } else {
     loadTasks()
+  }
+}
+
+// 语音输入
+const openVoiceInput = () => {
+  voiceInputRef.value?.open()
+}
+
+const handleVoiceTaskCreated = (taskInfo: any) => {
+  Object.assign(currentTask, {
+    title: taskInfo.title,
+    description: taskInfo.description,
+    dueDate: taskInfo.dueDate,
+    priority: taskInfo.priority === 'high' ? 3 : taskInfo.priority === 'low' ? 1 : 2
+  })
+  openDialog()
+}
+
+// 智能分类
+const handleAIClassify = async () => {
+  if (!currentTask.title) {
+    ElMessage.warning('请先输入任务标题')
+    return
+  }
+  try {
+    const response = await classifyTask(currentTask.title, currentTask.description)
+    if (response.data) {
+      currentTask.category = response.data.category === 'work' ? '工作' :
+                            response.data.category === 'study' ? '学习' : '生活'
+      currentTask.priority = response.data.priority === 'high' ? 3 :
+                            response.data.priority === 'low' ? 1 : 2
+      ElMessage.success(`AI建议：${response.data.reason}`)
+    }
+  } catch (error) {
+    ElMessage.error('AI分类失败')
   }
 }
 
@@ -482,6 +532,12 @@ onUnmounted(() => {
   font-size: 20px;
   font-weight: 600;
   color: #202123;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .header-search {

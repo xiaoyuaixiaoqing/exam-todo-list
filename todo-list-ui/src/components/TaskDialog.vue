@@ -33,13 +33,20 @@
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="$emit('close')">取消</el-button>
-      <el-button type="primary" @click="$emit('save', task)">保存</el-button>
+      <div style="display: flex; justify-content: space-between; width: 100%;">
+        <el-button @click="$emit('aiClassify')" :icon="MagicStick">AI智能分类</el-button>
+        <div>
+          <el-button @click="$emit('close')">取消</el-button>
+          <el-button type="primary" @click="$emit('save', task)">保存</el-button>
+        </div>
+      </div>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
+import { MagicStick } from '@element-plus/icons-vue'
+
 defineProps<{
   visible: boolean
   task: any
@@ -48,6 +55,7 @@ defineProps<{
 defineEmits<{
   close: []
   save: [task: any]
+  aiClassify: []
 }>()
 
 const disabledDate = (time: Date) => {

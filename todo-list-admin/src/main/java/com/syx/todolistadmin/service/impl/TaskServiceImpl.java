@@ -18,6 +18,8 @@ import com.syx.todolistadmin.service.TaskService;
 import com.syx.todolistadmin.service.TeamService;
 import com.syx.todolistadmin.websocket.TaskWebSocketHandler;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -40,6 +42,7 @@ public class TaskServiceImpl implements TaskService {
     private final TeamService teamService;
 
     @Override
+    @CacheEvict(value = "tasks", key = "#result.id")
     public Task create(Task task) {
         // 权限检查：如果是团队任务，需要是团队成员或团队所有者
         if (task.getTeamId() != null) {
@@ -56,6 +59,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
+    @CacheEvict(value = "tasks", key = "#task.id")
     public Task update(Task task) {
         Task old = taskMapper.selectById(task.getId());
         if (old != null && !old.getVersion().equals(task.getVersion())) {
@@ -74,12 +78,14 @@ public class TaskServiceImpl implements TaskService {
         }
         taskMapper.updateById(task);
         Task updated = taskMapper.selectById(task.getId());
+
         taskLogService.log(task.getId(), task.getUserId(), "UPDATE", JSON.toJSONString(old), JSON.toJSONString(updated));
         broadcast("TASK_UPDATE", updated);
         return updated;
     }
 
     @Override
+    @CacheEvict(value = "tasks", key = "#id")
     public void delete(Long id) {
         Task task = taskMapper.selectById(id);
         if (task == null) {
@@ -111,16 +117,18 @@ public class TaskServiceImpl implements TaskService {
         }
         
         taskMapper.deleteById(id);
+
         taskLogService.log(id, task.getUserId(), "DELETE", JSON.toJSONString(task), null);
         broadcast("TASK_DELETE", task);
     }
 
     @Override
+    @Cacheable(value = "tasks", key = "#id")
     public Task getById(Long id) {
         Task task = taskMapper.selectById(id);
         if (task != null) {
-            String key = "task:lock:" + id;
-            String lockedUserId = redisTemplate.opsForValue().get(key);
+            String lockKey = "task:lock:" + id;
+            String lockedUserId = redisTemplate.opsForValue().get(lockKey);
             task.setLockedBy(lockedUserId != null ? Long.parseLong(lockedUserId) : null);
         }
         return task;

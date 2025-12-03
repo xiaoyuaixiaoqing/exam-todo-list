@@ -6,6 +6,8 @@ import com.syx.todolistadmin.mapper.UserMapper;
 import com.syx.todolistadmin.service.UserService;
 import com.syx.todolistadmin.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ public class UserServiceImpl implements UserService {
     private final StringRedisTemplate redisTemplate;
 
     @Override
+    @CacheEvict(value = "users", key = "#result.id")
     public User register(String username, String password, String email, String phone) {
         User user = new User();
         user.setUsername(username);
@@ -44,6 +47,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Cacheable(value = "users", key = "#id")
     public User getById(Long id) {
         return userMapper.selectById(id);
     }

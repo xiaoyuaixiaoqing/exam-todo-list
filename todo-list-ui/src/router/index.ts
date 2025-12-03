@@ -53,6 +53,12 @@ const router = createRouter({
       name: 'TeamRecycleBin',
       component: () => import('../views/TeamRecycleBin.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/settings',
+      name: 'Settings',
+      component: () => import('../views/Settings.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

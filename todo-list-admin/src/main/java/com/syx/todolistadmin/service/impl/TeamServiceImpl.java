@@ -6,6 +6,8 @@ import com.syx.todolistadmin.entity.TeamMember;
 import com.syx.todolistadmin.mapper.TeamMapper;
 import com.syx.todolistadmin.mapper.TeamMemberMapper;
 import com.syx.todolistadmin.service.TeamService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +28,7 @@ public class TeamServiceImpl implements TeamService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "teams", key = "#result.id")
     public Team createTeam(Team team, Long userId) {
         team.setOwnerId(userId);
         teamMapper.insert(team);
@@ -54,6 +57,7 @@ public class TeamServiceImpl implements TeamService {
     }
 
     @Override
+    @CacheEvict(value = "teams", key = "#id")
     public Team updateTeam(Long id, Team team, Long userId) {
         Team existing = teamMapper.selectById(id);
         if (existing == null || !existing.getOwnerId().equals(userId)) {
@@ -65,6 +69,7 @@ public class TeamServiceImpl implements TeamService {
     }
 
     @Override
+    @CacheEvict(value = "teams", key = "#id")
     public void deleteTeam(Long id, Long userId) {
         Team team = teamMapper.selectById(id);
         if (team == null || !team.getOwnerId().equals(userId)) {

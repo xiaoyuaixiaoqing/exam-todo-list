@@ -37,3 +37,46 @@ mybatis-plus:
       logic-not-delete-value: 1
       # ?????????
       logic-delete-field: is_deleted
+
+---
+# 阿里云配置
+aliyun:
+  access-key-id: YOUR_ACCESS_KEY_ID
+  access-key-secret: YOUR_ACCESS_KEY_SECRET
+  sms:
+    sign-name: YOUR_SMS_SIGN_NAME
+    template-code: YOUR_SMS_TEMPLATE_CODE
+  email:
+    from-address: noreply@yourdomain.com
+    password: YOUR_EMAIL_PASSWORD
+    region-id: cn-hangzhou
+
+spring:
+  mail:
+    host: smtp.mxhichina.com
+    port: 465
+    username: ${aliyun.email.from-address}
+    password: ${aliyun.email.password:YOUR_EMAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          ssl:
+            enable: true
+    default-encoding: UTF-8
+
+---
+# 讯飞星火配置
+xfyun:
+  app-id: YOUR_XFYUN_APP_ID
+  api-key: YOUR_XFYUN_API_KEY
+  api-secret: YOUR_XFYUN_API_SECRET
+  voice-url: wss://iat-api.xfyun.cn/v2/iat
+
+---
+# 阿里通义千问配置
+dashscope:
+  api-key: YOUR_DASHSCOPE_API_KEY
+  model: qwen-turbo
