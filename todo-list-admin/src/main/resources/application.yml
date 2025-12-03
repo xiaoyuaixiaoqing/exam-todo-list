@@ -9,8 +9,8 @@ spring:
   #datasource
   datasource:
     url: jdbc:mysql://192.168.152.128:3306/todo_list?serverTimezone=UTC
-    username: root
-    password: 200446sYx@
+    username: xxxxxx
+    password: xxxxxx
     driver-class-name: com.mysql.cj.jdbc.Driver
   #????/templates/????
   #??redis
@@ -18,7 +18,7 @@ spring:
     redis:
       host: 192.168.152.128
       port: 6379
-      password: 200446sYx
+      password: xxxxxxx
 
 ---
 #mybatis
